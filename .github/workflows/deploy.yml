@@ -1,0 +1,64 @@
+name: Build and Deploy Nginx with Basic Auth
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select environment to deploy'
+        type: choice
+        required: true
+        options:
+          - dev
+          - test
+          - preprod
+
+env:
+  LOCAL_IMAGE: nginx-basic-auth:latest
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ${{ env.LOCAL_IMAGE }} .
+
+  deploy_dev:
+    needs: build
+    if: ${{ github.event_name == 'push' || github.event.inputs.environment == 'dev' }}
+    runs-on: self-hosted
+    environment: dev
+    steps:
+      - uses: ./.github/actions/deploy
+        with:
+          env_file: './environments/dev.env'
+          container_name: 'dev_nginx'
+          port: 8080
+          environment: 'dev'
+
+  deploy_test:
+    needs: build
+    if: ${{ github.event_name == 'push' || github.event.inputs.environment == 'test' }}
+    runs-on: self-hosted
+    environment: test
+    steps:
+      - uses: ./.github/actions/deploy
+        with:
+          env_file: './environments/test.env'
+          container_name: 'test_nginx'
+          port: 8081
+          environment: 'test'
+
+  deploy_preprod:
+    needs: build
+    if: ${{ github.event_name == 'push' || github.event.inputs.environment == 'preprod' }}
+    runs-on: self-hosted
+    environment: preprod
+    steps:
+      - uses: ./.github/actions/deploy
+        with:
+          env_file: './environments/preprod.env'
+          container_name: 'preprod_nginx'
+          port: 8082
+          environment: 'preprod'

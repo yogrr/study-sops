@@ -1,0 +1,54 @@
+name: 'Deploy Container'
+
+description: 'Deploy nginx container with basic auth'
+
+inputs:
+  env_file:
+    description: 'Path to environment file'
+    required: true
+  container_name:
+    description: 'Container name'
+    required: true
+  port:
+    description: 'Host port'
+    required: true
+  environment:
+    description: 'Environment name'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set env vars
+      shell: bash
+      run: |
+        echo "ENV_FILE=${{ inputs.env_file }}" >> $GITHUB_ENV
+        echo "CONTAINER_NAME=${{ inputs.container_name }}" >> $GITHUB_ENV
+        echo "PORT=${{ inputs.port }}" >> $GITHUB_ENV
+
+    - name: Decrypt and load env vars
+      shell: bash
+      run: |
+        export AUTH_USER=$(sops --extract '["AUTH_USER"]' --decrypt $ENV_FILE)
+        export AUTH_PASS=$(sops --extract '["AUTH_PASS"]' --decrypt $ENV_FILE)
+        echo "AUTH_USER=$AUTH_USER" >> $GITHUB_ENV
+        echo "AUTH_PASS=$AUTH_PASS" >> $GITHUB_ENV
+
+    - name: Stop and remove old container
+      shell: bash
+      run: |
+        if docker ps -a --filter "name=${{ inputs.container_name }}" --quiet; then
+          docker stop ${{ inputs.container_name }} || true
+          docker rm ${{ inputs.container_name }} || true
+        fi
+
+    - name: Run new container
+      shell: bash
+      run: |
+        docker run -d --name ${{ inputs.container_name }} -p ${{ inputs.port }}:80 \
+          -e AUTH_USER="$AUTH_USER" \
+          -e AUTH_PASS="$AUTH_PASS" \
+          ${{ env.LOCAL_IMAGE }}
