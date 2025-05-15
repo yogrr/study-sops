@@ -1,0 +1,48 @@
+name: Build and Deploy Nginx with Basic Auth
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  LOCAL_IMAGE: nginx-basic-auth:latest
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.LOCAL_IMAGE }} .
+
+  deploy_dev:
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Load env variables
+        run: |
+          export ENV_FILE=./environments/dev.env
+          export CONTAINER_NAME=dev_nginx
+          if [ -f "$ENV_FILE" ]; then export $(grep -v '^description=' "$ENV_FILE" | xargs); fi
+          echo "CONTAINER_NAME=$CONTAINER_NAME" >> $GITHUB_ENV
+          echo "AUTH_USER=$AUTH_USER" >> $GITHUB_ENV
+          echo "AUTH_PASS=$AUTH_PASS" >> $GITHUB_ENV
+
+      - name: Stop and remove old container
+        run: |
+          if docker ps -a --filter "name=${{ env.CONTAINER_NAME }}" --quiet; then
+            docker stop ${{ env.CONTAINER_NAME }} || true
+            docker rm ${{ env.CONTAINER_NAME }} || true
+          fi
+
+      - name: Run new container
+        run: |
+          docker run -d --name ${{ env.CONTAINER_NAME }} -p 8080:80 \
+            -e AUTH_USER="${{ env.AUTH_USER }}" \
+            -e AUTH_PASS="${{ env.AUTH_PASS }}" \
+            ${{ env.LOCAL_IMAGE }}
