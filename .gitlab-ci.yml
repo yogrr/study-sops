@@ -1,0 +1,89 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  LOCAL_IMAGE: nginx-basic-auth:latest
+
+build:
+  stage: build
+  tags:
+    - shell
+  script:
+    - docker build -t "$LOCAL_IMAGE" .
+  only:
+    - main
+
+deploy_dev:
+  stage: deploy
+  tags:
+    - shell
+  # Перед запуском этой задачи загружаем переменные для dev
+  before_script:
+    - export ENV_FILE=./environments/dev.env
+    - export CONTAINER_NAME=dev_nginx
+    - if [ -f "$ENV_FILE" ]; then export $(grep -v '^description=' "$ENV_FILE" | xargs); fi
+  script:
+#    - echo "Deploying DEV container: $CONTAINER_NAME on port 8080"
+    - >
+      if docker ps -a --filter "name=$CONTAINER_NAME" --quiet; then
+        docker stop "$CONTAINER_NAME" || true;
+        docker rm "$CONTAINER_NAME" || true;
+      fi
+
+    # Запускаем новый контейнер
+    - >
+      docker run -d --name "$CONTAINER_NAME" -p 8080:80 \
+        -e AUTH_USER="$AUTH_USER" \
+        -e AUTH_PASS="$AUTH_PASS" \
+        "$LOCAL_IMAGE"
+  when: manual
+deploy_test:
+  stage: deploy
+  tags:
+    - shell
+  # Перед запуском этой задачи загружаем переменные для test
+  before_script:
+    - export ENV_FILE=./environments/test.env
+    - export CONTAINER_NAME=test_nginx
+    - if [ -f "$ENV_FILE" ]; then export $(grep -v '^description=' "$ENV_FILE" | xargs); fi
+  script:
+#    - echo "Deploying TEST container: $CONTAINER_NAME on port 8081"
+    - >
+      if docker ps -a --filter "name=$CONTAINER_NAME" --quiet; then
+        docker stop "$CONTAINER_NAME" || true;
+        docker rm "$CONTAINER_NAME" || true;
+      fi
+
+    # Запускаем новый контейнер
+    - >
+      docker run -d --name "$CONTAINER_NAME" -p 8081:80 \
+        -e AUTH_USER="$AUTH_USER" \
+        -e AUTH_PASS="$AUTH_PASS" \
+        "$LOCAL_IMAGE"
+  when: manual
+
+deploy_preprod:
+  stage: deploy
+  tags:
+    - shell
+  before_script:
+    - export ENV_FILE=./environments/preprod.env
+    - export CONTAINER_NAME=preprod_nginx
+    - if [ -f "$ENV_FILE" ]; then export $(grep -v '^description=' "$ENV_FILE" | xargs); fi
+  script:
+ #   - echo "Deploying PREPROD container: $CONTAINER_NAME on port 8082"
+    - >
+      if docker ps -a --filter "name=$CONTAINER_NAME" --quiet; then
+        docker stop "$CONTAINER_NAME" || true;
+        docker rm "$CONTAINER_NAME" || true;
+      fi
+
+    # Запускаем новый контейнер
+    - >
+      docker run -d --name "$CONTAINER_NAME" -p 8082:80 \
+        -e AUTH_USER="$AUTH_USER" \
+        -e AUTH_PASS="$AUTH_PASS" \
+        "$LOCAL_IMAGE"
+  when: manual
+
